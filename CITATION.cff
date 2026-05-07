@@ -1,23 +1,31 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata below."
 type: software
-title: "planning-with-files"
-abstract: "Claude Code skill implementing Manus-style persistent markdown planning — the workflow pattern behind the $2B acquisition. Enables AI agents to plan, track progress, and resume work across sessions using structured markdown files."
+title: "planning-with-linear"
+abstract: "Claude Code skill for planning and tracking complex tasks using Linear's Project / Issue / Document / Status Update primitives as external memory. Forked from planning-with-files (Manus-style file-based planning); same context-engineering pattern, Linear as the storage backend."
 authors:
-  - family-names: Adi
-    given-names: Ahmad Othman Ammar
-    alias: OthmanAdi
-version: "2.37.0"
-date-released: "2026-05-01"
+  - alias: identity16
+    given-names: identity16
+references:
+  - type: software
+    title: "planning-with-files"
+    authors:
+      - family-names: Adi
+        given-names: Ahmad Othman Ammar
+        alias: OthmanAdi
+    repository-code: "https://github.com/OthmanAdi/planning-with-files"
+    notes: "Upstream project; this work is a fork at v2.37.0."
+version: "1.0.0"
+date-released: "2026-05-07"
 license: MIT
-url: "https://github.com/OthmanAdi/planning-with-files"
-repository-code: "https://github.com/OthmanAdi/planning-with-files"
+url: "https://github.com/identity16/planning-with-linear"
+repository-code: "https://github.com/identity16/planning-with-linear"
 keywords:
   - claude-code
   - agent-skill
   - planning
   - task-management
-  - manus-style
-  - autonomous-agents
-  - markdown
-  - ai-agents
+  - linear
+  - linear-mcp
+  - context-engineering
+  - issue-tracker

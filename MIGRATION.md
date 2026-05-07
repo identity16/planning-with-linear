@@ -1,128 +1,95 @@
-# Migration Guide: v1.x to v2.0.0
+# Migration: `planning-with-files` → `planning-with-linear`
 
-## Overview
+This guide is for users of [OthmanAdi/planning-with-files](https://github.com/OthmanAdi/planning-with-files) v2.x who want to switch to this Linear-backed fork.
 
-Version 2.0.0 adds hooks integration and enhanced templates while maintaining backward compatibility with existing workflows.
+## TL;DR
 
-## What's New
+The Manus pattern is unchanged. The storage backend moves from local markdown to Linear:
 
-### 1. Hooks (Automatic Behaviors)
+| Before (`planning-with-files`) | After (`planning-with-linear`) |
+|---|---|
+| `task_plan.md` in your repo | Linear **Project** + phase **Issues** |
+| `findings.md` in your repo | Linear **Document** linked to the project |
+| `progress.md` in your repo | Linear **Status Updates** + Issue **Comments** |
+| Phase status checkbox | Issue workflow state (Todo / In Progress / Done) |
+| Errors logged in markdown table | Comments on phase issue + `error` label |
+| `.planning/.active_plan` | `.planning/.active_linear` (cached project ID) |
+| `/plan-attest` (SHA-256 lock) | Removed — different threat model |
 
-v2.0.0 adds Claude Code hooks that automate key Manus principles:
+You keep the 3-strike error protocol, the 2-action rule, the 5-question reboot test, and the read-before-decide pattern. They now target Linear surfaces instead of markdown files.
 
-| Hook | Trigger | Behavior |
-|------|---------|----------|
-| `PreToolUse` | Before Write/Edit/Bash | Reads `task_plan.md` to refresh goals |
-| `Stop` | Before stopping | Verifies all phases are complete |
+## Prerequisites
 
-**Benefit:** You no longer need to manually remember to re-read your plan. The hook does it automatically.
+- A Linear MCP server registered with your harness, exposing `mcp__linear__*` tools. See [linear.app/docs/mcp](https://linear.app/docs/mcp).
+- Permission to create projects, issues, documents, status updates in at least one Linear team.
 
-### 2. Templates Directory
+## Migration steps
 
-New templates provide structured starting points:
-
-```
-templates/
-├── task_plan.md    # Phase tracking with status fields
-├── findings.md     # Research storage with 2-action reminder
-└── progress.md     # Session log with 5-question reboot test
-```
-
-### 3. Scripts Directory
-
-Helper scripts for common operations:
+### 1. Install the new skill
 
 ```
-scripts/
-├── init-session.sh     # Creates all 3 planning files
-└── check-complete.sh   # Verifies task completion
+/plugin marketplace add identity16/planning-with-linear
+/plugin install planning-with-linear@planning-with-linear
 ```
 
-## Migration Steps
+### 2. Decide what to do with in-flight `task_plan.md` files
 
-### Step 1: Update the Plugin
+For each repo with active planning files:
 
-```bash
-# If installed via marketplace
-/plugin update planning-with-files
+- **Finish in markdown, then switch.** Easiest. Complete the active task using `planning-with-files`, then start the next task with `/plan` (Linear-backed).
+- **Port now.** Run `/plan` in the repo, pick a team, give the same task name. The skill will create a fresh Project + phase Issues. Manually copy the relevant content from `task_plan.md` / `findings.md` / `progress.md` into the matching Linear surfaces:
+  - Goal → Project description
+  - Each phase heading → one Issue (set state to match the markdown checkbox: `[ ]` → Todo, `[x]` → Done, the active one → In Progress)
+  - Findings sections → Findings Document
+  - Errors table → comments on the relevant phase issue, with the `error` label
 
-# If installed manually
-cd .claude/plugins/planning-with-files
-git pull origin master
-```
+### 3. Clean up old artifacts
 
-### Step 2: Existing Files Continue Working
-
-Your existing `task_plan.md` files will continue to work. The hooks look for this file and gracefully handle its absence.
-
-### Step 3: Adopt New Templates (Optional)
-
-To use the new structured templates, you can either:
-
-1. **Start fresh** with `./scripts/init-session.sh`
-2. **Copy templates** from `templates/` directory
-3. **Keep your existing format** - it still works
-
-### Step 4: Update Phase Status Format (Recommended)
-
-v2.0.0 templates use a more structured status format:
-
-**v1.x format:**
-```markdown
-- [x] Phase 1: Setup ✓
-- [ ] Phase 2: Implementation (CURRENT)
-```
-
-**v2.0.0 format:**
-```markdown
-### Phase 1: Setup
-- **Status:** complete
-
-### Phase 2: Implementation
-- **Status:** in_progress
-```
-
-The new format enables the `check-complete.sh` script to automatically verify completion.
-
-## Breaking Changes
-
-**None.** v2.0.0 is fully backward compatible.
-
-If you prefer the v1.x behavior without hooks, use the `legacy` branch:
-
-```bash
-git checkout legacy
-```
-
-## New Features to Adopt
-
-### The 2-Action Rule
-
-After every 2 view/browser/search operations, save findings to files:
+After porting (or when no longer needed):
 
 ```
-WebSearch → WebSearch → MUST Write findings.md
+rm -rf .planning/ task_plan.md findings.md progress.md .plan-attestation
 ```
 
-### The 3-Strike Error Protocol
+`.planning/.active_linear` lives in the same `.planning/` directory in the new skill, so don't `rm` the directory if you've already initialized a Linear plan.
 
-Structured error recovery:
+### 4. Slash commands stay the same
 
-1. Diagnose & Fix
-2. Alternative Approach
-3. Broader Rethink
-4. Escalate to User
+`/plan`, `/start`, `/status` keep their names. New addition: `/sync` (refreshes `.planning/.active_linear` from Linear). Removed: `/plan-attest`.
 
-### The 5-Question Reboot Test
+## Conceptual changes
 
-Your planning files should answer:
+### Read vs. write paths
 
-1. Where am I? → Current phase
-2. Where am I going? → Remaining phases
-3. What's the goal? → Goal statement
-4. What have I learned? → findings.md
-5. What have I done? → progress.md
+In `planning-with-files`, hooks read `task_plan.md` on every prompt and tool call and inject up to 50 lines into the model context. That made attestation necessary — the file's bytes flowed straight into the prompt, so a malicious local edit was a prompt-injection vector.
 
-## Questions?
+In `planning-with-linear`, hooks **never inject Linear content**. They only read `.planning/.active_linear` (a small, locally-controlled JSON cache) and emit the project URL + a "re-fetch with `get_project` for fresh state" reminder. Linear bodies arrive in context only via deliberate `mcp__linear__*` tool calls the model can label as untrusted. SHA-256 attestation is therefore unnecessary and was dropped.
 
-Open an issue: https://github.com/OthmanAdi/planning-with-files/issues
+### Phase = Issue (not Milestone)
+
+Linear has Milestones, but they have no native workflow state and accept no comments or labels. The original skill's pending/in_progress/complete carry over cleanly to Issue states (Todo/In Progress/Done) — Issues, not Milestones, are the natural fit. See `skills/planning-with-linear/reference.md` for the rationale.
+
+### Status Update cadence
+
+`progress.md` was append-only and unbounded. Linear Status Updates are visible to stakeholders in the project view — don't post one per tool call. Recommended cadence: session start, phase transitions, session end. Fine-grained logs go in issue comments.
+
+The new `health` field (`onTrack` / `atRisk` / `offTrack`) maps to error count in the active phase: 0 → onTrack, 1–2 → atRisk, 3+ or blocker → offTrack.
+
+### Decisions go in two places
+
+Long-form, durable technical decisions → Findings Document, "Technical Decisions" section.
+
+Mid-phase tactical decisions ("we changed approach because X") → comment on the phase issue + `decision` label. Anchored to the phase that made the call.
+
+## What's removed
+
+- The 5 localization variants (`-ar`, `-de`, `-es`, `-zh`, `-zht`).
+- The 11+ IDE mirror directories (`.codex`, `.cursor`, `.gemini`, …). This skill targets Claude Code only.
+- PowerShell scripts. Linux/macOS bash only.
+- `/plan-attest`, `attest-plan.sh`/`.ps1`, the SHA-256 attestation flow.
+- `session-catchup.py` (438 lines of session JSONL parsing). Replaced by `linear-catchup.sh` (~50 lines comparing `last_synced_at` against `git log`).
+- The `analytics` template variant. The default templates cover analytics use cases via the Findings Document.
+
+## Questions
+
+Open an issue at https://github.com/identity16/planning-with-linear/issues.
