@@ -2,6 +2,71 @@
 
 All notable changes to this project will be documented in this file.
 
+This changelog covers two distinct projects:
+
+- **v1.0.0 onward**: `planning-with-linear` (this fork, by [@identity16](https://github.com/identity16)) — Linear-backed planning.
+- **v2.37.0 and earlier**: `planning-with-files` (upstream, by [@OthmanAdi](https://github.com/OthmanAdi)) — file-based planning. Preserved for historical context.
+
+---
+
+## [1.0.0] - 2026-05-07
+
+Initial release of the `planning-with-linear` fork. Replaces the file-based storage backend of `planning-with-files` with Linear's Project / Issue / Document / Status Update primitives. The Manus-style context-engineering pattern (filesystem as external memory, recitation, error persistence) is preserved.
+
+### Added
+
+- `skills/planning-with-linear/SKILL.md` — entry point with simplified hooks (project ID + cached phase summary only, no body injection), Linear MCP tool list in `allowed-tools`, and a rewritten Quick Start, 7 Critical Rules, and 3-Strike Protocol targeting Linear surfaces.
+- `skills/planning-with-linear/reference.md` — core mapping table (file concept ↔ Linear surface ↔ MCP tool), label conventions (`phase`, `error`, `decision`, `blocker`), Status Update cadence and `health` field mapping, security boundary, out-of-scope list, and the six Manus principles adapted for Linear.
+- `skills/planning-with-linear/examples.md` — four worked scenarios (research / bug fix / feature dev / 3-strike error recovery) as MCP call sequences.
+- 5 markdown templates for Linear surfaces: `project-description.md`, `phase-issue-body.md`, `findings-document.md`, `status-update-body.md`, `error-comment.md`. Each is annotated with the MCP call and field that consumes it.
+- 5 shell scripts (Linux/macOS bash): `init-linear.sh` (pre-flight + double-init guard), `set-active-linear.sh` (write/clear/show pointer), `resolve-active-linear.sh` (hook output), `check-linear-complete.sh` (Stop hook summary), `linear-catchup.sh` (git activity vs `last_synced_at` drift detector).
+- `commands/sync.md` — new slash command. Re-fetches the project from Linear and refreshes `.planning/.active_linear`.
+
+### Changed
+
+- `commands/plan.md`, `commands/start.md`, `commands/status.md` — rewritten to drive Linear MCP calls instead of file reads/writes. Slash command names preserved (`/plan`, `/start`, `/status`).
+- `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` — repointed to `planning-with-linear` v1.0.0, `identity16` ownership, fork repository URL.
+- `CITATION.cff` — updated for the fork; cites the upstream `planning-with-files` v2.37.0 in `references`.
+- `README.md`, `MIGRATION.md`, `AGENTS.md` — rewritten to describe the Linear-backed fork, drop OthmanAdi-specific release/marketing content, and document what's deliberately out of scope.
+
+### Removed
+
+- `skills/planning-with-files/` (canonical English skill).
+- `skills/planning-with-files-{ar,de,es,zh,zht}/` (5 localization variants). This fork is English-only.
+- `.codex/`, `.cursor/`, `.gemini/`, `.kiro/`, `.opencode/`, `.continue/`, `.factory/`, `.hermes/`, `.codebuddy/`, `.mastracode/`, `.pi/` — all 11 IDE mirror directories. This fork targets Claude Code only.
+- Root `templates/` and `scripts/` (mirrors of the original skill content).
+- `commands/plan-{ar,de,es,zh}.md` (localized command variants).
+- `commands/plan-attest.md` and `scripts/attest-plan.{sh,ps1}` — SHA-256 attestation. The original needed it because hooks read `task_plan.md` and injected its bytes on every fire; this fork's hooks never inject Linear bodies, so the injection surface is closed structurally.
+- `scripts/session-catchup.py` (438 lines of session JSONL parsing). Replaced by `linear-catchup.sh` (~50 lines comparing `last_synced_at` against `git log`) — Linear is the source of truth, so catchup only needs to detect repo activity that hasn't been reflected in a Status Update yet.
+- All PowerShell `.ps1` scripts — Linux/macOS bash only for v1.
+
+### Mapping (file concept → Linear surface)
+
+| `planning-with-files` | `planning-with-linear` |
+|---|---|
+| `task_plan.md` Goal | Project description (`save_project`) |
+| `task_plan.md` Phases | Issues with `phase` label, native workflow state (`save_issue`) |
+| Phase status (pending/in_progress/complete) | Issue state (Todo / In Progress / Done) |
+| `findings.md` | Document linked to the project (`save_document`) |
+| `progress.md` session log | Status Updates (`save_status_update`) — append-only |
+| `progress.md` test/error details | Comments on the relevant phase issue (`save_comment`) |
+| Errors Encountered table | `save_comment` + `error` label on parent issue |
+| `.planning/.active_plan` | `.planning/.active_linear` (cached project ID, URL, team, phase summary) |
+
+### Security
+
+Hooks no longer inject Linear content into model context. They emit only the cached project ID, URL, active phase summary, and a "re-fetch with `get_project` before deciding" reminder. Linear bodies (descriptions, comments, status updates) reach the model only through deliberate `mcp__linear__*` tool calls, which the model can label as untrusted. SHA-256 attestation (`/plan-attest`) is therefore no longer necessary and was removed.
+
+### Credits
+
+Forked from [OthmanAdi/planning-with-files](https://github.com/OthmanAdi/planning-with-files) at v2.37.0. The original Manus-style pattern, the 3-strike error protocol, the 2-action rule, the 5-question reboot test, and the read-before-decide principle are preserved verbatim — only the storage backend changed. See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the upstream contributor list.
+
+---
+
+# Upstream history (`planning-with-files` by @OthmanAdi)
+
+The entries below are the original `planning-with-files` changelog, preserved unchanged.
+
 ## [2.37.0] - 2026-05-05
 
 ### Security
