@@ -1,40 +1,23 @@
 {
-  "name": "planning-with-files",
-  "version": "2.37.0",
-  "description": "Manus-style persistent markdown files for planning, progress tracking, and knowledge storage. Works with Claude Code, Kiro, Clawd CLI, Gemini CLI, Cursor, Continue, Hermes, and 17+ AI coding assistants. Now with Arabic, German, Spanish, and Chinese (Simplified & Traditional) support.",
+  "name": "planning-with-linear",
+  "version": "1.0.0",
+  "description": "Plan and track complex tasks using Linear's Project / Issue / Document / Status Update primitives instead of local markdown files. Forked from planning-with-files; same context-engineering principles, Linear as the storage backend.",
   "author": {
-    "name": "OthmanAdi",
-    "url": "https://github.com/OthmanAdi"
+    "name": "identity16",
+    "url": "https://github.com/identity16"
   },
-  "repository": "https://github.com/OthmanAdi/planning-with-files",
+  "repository": "https://github.com/identity16/planning-with-linear",
   "license": "MIT",
   "keywords": [
     "planning",
-    "manus",
+    "linear",
+    "linear-mcp",
     "workflow",
-    "markdown",
     "context-engineering",
     "task-management",
-    "templates",
-    "clawd",
-    "clawdbot",
-    "clawdhub",
-    "kiro",
-    "kiro-steering",
-    "amazon-kiro",
-    "gemini",
-    "cursor",
-    "continue",
-    "hermes",
-    "multi-ide",
+    "project-management",
+    "issue-tracker",
     "agent-skills",
-    "arabic",
-    "german",
-    "spanish",
-    "chinese",
-    "simplified-chinese",
-    "traditional-chinese",
-    "internationalization",
-    "i18n"
+    "claude-code"
   ]
 }

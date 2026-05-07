@@ -1,49 +1,55 @@
 ---
-description: "Show current planning status at a glance - phases, progress, and any logged errors."
+description: "Show the current Linear-backed planning status: project URL, phase issues with workflow states, recent status updates, and any error-labeled issues."
 ---
 
-Read task_plan.md from the current project directory and display a compact status summary.
+Read `.planning/.active_linear` for the cached pointer, then fetch authoritative state from Linear.
 
-## What to Show
+## What to show
 
-1. **Current Phase**: Extract from "## Current Phase" section
-2. **Phase Progress**: Count phases and their status (pending/in_progress/complete)
-3. **Phase List**: Show each phase with status icon
-4. **Errors**: Count entries in "## Errors Encountered" table if present
-5. **Files Check**: Confirm which planning files exist
+1. **Project**: name, URL, team key (from cache + `mcp__linear__get_project`).
+2. **Phase issues**: each issue's ID, title, state — fetched fresh via `mcp__linear__list_issues({ projectId, includeArchived: false })`.
+3. **Active phase**: the issue currently in the team's "started" state (e.g. "In Progress").
+4. **Recent status updates**: last 3 via `mcp__linear__get_status_updates({ projectId })`.
+5. **Errors and blockers**: count of issues in the project with the `error` or `blocker` label.
 
-## Status Icons
+After fetching, refresh `.planning/.active_linear` via `set-active-linear.sh write '<json>'` so the cache is fresh for hooks.
 
-- `[ ]` or "pending" → ⏸️
-- "in_progress" → 🔄
-- `[x]` or "complete" → ✅
-- "failed" or "blocked" → ❌
+## Status icons (state → icon)
 
-## Output Format
+- backlog / todo → ⏸️
+- in_progress / started → 🔄
+- done / completed → ✅
+- canceled → ❌
+- blocker label present → 🚧
 
-```
-📋 Planning Status
-
-Current: Phase {N} of {total} ({percent}%)
-Status: {status_icon} {status_text}
-
-  {icon} Phase 1: {name}
-  {icon} Phase 2: {name} ← you are here
-  {icon} Phase 3: {name}
-  ...
-
-Files: task_plan.md {✓|✗} | findings.md {✓|✗} | progress.md {✓|✗}
-Errors logged: {count}
-```
-
-## If No Planning Files Exist
+## Output format
 
 ```
-📋 No planning files found
+📋 Linear Plan: <project_name>
+URL: <project_url>
 
-Run /plan to start a new planning session.
+Active: <issue_id> — <issue_title>
+Phases (X/N done):
+  ✅ ENG-101 Phase 1: Discovery
+  🔄 ENG-102 Phase 2: Design   ← you are here
+  ⏸️ ENG-103 Phase 3: Implement
+
+Recent updates:
+  - 2026-05-07 onTrack: Wired up theme switching.
+  - 2026-05-06 onTrack: Toggle component done.
+
+Errors logged: 1   Blockers: 0
 ```
 
-## Keep It Brief
+## If `.planning/.active_linear` is absent
 
-This is a quick status check, not a full report. Show just enough to answer "where am I?" without re-reading all the files.
+```
+📋 No active Linear plan in this repo.
+Run /plan to start one.
+```
+
+## If Linear MCP is unavailable
+
+Fall back to the cache and label everything "(cached, may be stale)". Recommend reconnecting Linear MCP and running `/sync`.
+
+Keep it brief — this is a quick "where am I?" check.
