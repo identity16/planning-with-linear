@@ -70,6 +70,29 @@ The model then works phase by phase, calling `save_comment` to log details, tran
 
 ---
 
+## Triage / Backlog flow
+
+The skill leans on two Linear states that aren't part of the active phase pipeline:
+
+- **Triage** — an inbox for ad-hoc ideas, requests, or discoveries that surface mid-execution but aren't yet a phase. Captured fast with `save_issue(state=Triage)` so they don't pollute the active phase, then sorted at the next phase boundary.
+- **Backlog** — phases that are planned but not yet ready to start (waiting on a prior phase, post-MVP stretch work, deferred follow-ups). Phase issues can live in `Backlog` until prerequisites are met, then graduate to `Todo`.
+
+```mermaid
+flowchart LR
+    Idea([💡 mid-execution<br/>idea or request]) --> Triage[Triage<br/>inbox]
+    Triage -->|promote to phase| Backlog[Backlog<br/>deferred phase]
+    Triage -->|act now| Todo
+    Triage -->|drop| Cancelled[Cancelled]
+    Backlog -->|prerequisites met| Todo[Todo]
+    Todo --> InProgress[In Progress]
+    InProgress --> Done[Done]
+    InProgress -.->|3-strike| Blocker[blocker label<br/>+ offTrack update]
+```
+
+The active phase pipeline is still `Todo → In Progress → Done`; Triage and Backlog are upstream holding areas so the pipeline stays focused.
+
+---
+
 ## Hooks
 
 The skill registers four hooks. None of them inject Linear *content* into the model — they only read the local cache file. This intentionally closes the prompt-injection surface that hash attestation existed to mitigate in the original skill.

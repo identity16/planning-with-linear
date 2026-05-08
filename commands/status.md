@@ -7,16 +7,20 @@ Read `.planning/.active_linear` for the cached pointer, then fetch authoritative
 ## What to show
 
 1. **Project**: name, URL, team key (from cache + `mcp__linear__get_project`).
-2. **Phase issues**: each issue's ID, title, state — fetched fresh via `mcp__linear__list_issues({ projectId, includeArchived: false })`.
+2. **Phase issues**: each issue's ID, title, state — fetched fresh via `mcp__linear__list_issues({ projectId, includeArchived: false })`. Filter to issues with the `phase` label for the phase pipeline; everything else (no label) is triage.
 3. **Active phase**: the issue currently in the team's "started" state (e.g. "In Progress").
-4. **Recent status updates**: last 3 via `mcp__linear__get_status_updates({ projectId })`.
-5. **Errors and blockers**: count of issues in the project with the `error` or `blocker` label.
+4. **Triage queue**: count of issues in `state=Triage` (no `phase` label). If non-zero, hint to sort at the next phase boundary.
+5. **Backlog phases**: count of phase-labeled issues in `state=Backlog`. These are planned but not yet ready.
+6. **Recent status updates**: last 3 via `mcp__linear__get_status_updates({ projectId })`.
+7. **Errors and blockers**: count of issues in the project with the `error` or `blocker` label.
 
 After fetching, refresh `.planning/.active_linear` via `set-active-linear.sh write '<json>'` so the cache is fresh for hooks.
 
 ## Status icons (state → icon)
 
-- backlog / todo → ⏸️
+- triage → 📥
+- backlog → 🗂️
+- todo → ⏸️
 - in_progress / started → 🔄
 - done / completed → ✅
 - canceled → ❌
@@ -33,6 +37,11 @@ Phases (X/N done):
   ✅ ENG-101 Phase 1: Discovery
   🔄 ENG-102 Phase 2: Design   ← you are here
   ⏸️ ENG-103 Phase 3: Implement
+  🗂️ ENG-104 Phase 4: Polish (backlog — waits on Phase 3)
+
+Triage (2): sort at next phase boundary
+  📥 ENG-110 Refactor settings loader
+  📥 ENG-111 User asked about dark-mode persistence
 
 Recent updates:
   - 2026-05-07 onTrack: Wired up theme switching.
