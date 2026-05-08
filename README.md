@@ -63,7 +63,7 @@ When you run `/plan`:
 1. The skill calls `mcp__linear__list_teams` and asks which team to use.
 2. It caches the team's actual workflow state names (e.g. "Backlog / Todo / In Progress / Done") — Linear teams can rename their states, so this is fetched, not hardcoded.
 3. It ensures the canonical labels exist: `phase`, `error`, `decision`, `blocker`. Missing ones are created with `mcp__linear__create_issue_label`.
-4. It creates the **Project**, one **Issue** per phase (first phase In Progress, the rest Todo), the **Findings Document**, and the kickoff **Status Update**.
+4. It creates the **Project**, one **Issue** per phase (first phase In Progress; immediately-actionable phases Todo; phases that depend on a prior phase Backlog), wires up `blockedBy` relations between phases, then creates the **Findings Document** and the kickoff **Status Update**.
 5. It writes `.planning/.active_linear` with the project ID, URL, team, document ID, cached state names, and a phase summary.
 
 The model then works phase by phase, calling `save_comment` to log details, transitioning issue states as it goes, and posting Status Updates at session start, phase transitions, and session end. Errors follow a 3-strike protocol with `error`/`blocker` labels.
@@ -75,21 +75,24 @@ The model then works phase by phase, calling `save_comment` to log details, tran
 The skill leans on two Linear states that aren't part of the active phase pipeline:
 
 - **Triage** — an inbox for ad-hoc ideas, requests, or discoveries that surface mid-execution but aren't yet a phase. Captured fast with `save_issue(state=Triage)` so they don't pollute the active phase, then sorted at the next phase boundary.
-- **Backlog** — phases that are planned but not yet ready to start (waiting on a prior phase, post-MVP stretch work, deferred follow-ups). Phase issues can live in `Backlog` until prerequisites are met, then graduate to `Todo`.
+- **Backlog** — phases that are planned but not yet ready to start (waiting on a prior phase, post-MVP stretch work, deferred follow-ups). Phase issues can live in `Backlog` until their `blockedBy` relations are all `Done`, then graduate to `Todo`.
+
+Phase ordering is encoded with Linear's native **issue relations** (`blockedBy` / `blocks` / `relatedTo` / `duplicateOf` on `save_issue`) — not as prose in the issue description. That makes "what unblocks Phase 3?" a query, not a re-read.
 
 ```mermaid
 flowchart LR
     Idea([💡 mid-execution<br/>idea or request]) --> Triage[Triage<br/>inbox]
-    Triage -->|promote to phase| Backlog[Backlog<br/>deferred phase]
+    Triage -->|promote, set blockedBy| Backlog[Backlog<br/>deferred phase]
     Triage -->|act now| Todo
-    Triage -->|drop| Cancelled[Cancelled]
-    Backlog -->|prerequisites met| Todo[Todo]
+    Triage -->|duplicateOf + close| Cancelled[Cancelled]
+    Backlog -->|all blockedBy → Done| Todo[Todo]
     Todo --> InProgress[In Progress]
     InProgress --> Done[Done]
+    Done -. unblocks .-> Backlog
     InProgress -.->|3-strike| Blocker[blocker label<br/>+ offTrack update]
 ```
 
-The active phase pipeline is still `Todo → In Progress → Done`; Triage and Backlog are upstream holding areas so the pipeline stays focused.
+The active phase pipeline is still `Todo → In Progress → Done`; Triage and Backlog are upstream holding areas so the pipeline stays focused. Edges labelled `blockedBy` / `duplicateOf` are Linear issue relations, not free-form text.
 
 ---
 

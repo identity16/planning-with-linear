@@ -104,9 +104,26 @@ Two upstream holding areas keep the active phase pipeline (`Todo → In Progress
 
 **When to use Triage**: something comes up in the middle of a phase that isn't part of the current goal — a refactor opportunity, a user request that drifted in, a bug discovered in unrelated code. Don't widen the active phase. Create a new issue with `state=Triage` and a one-line title, then keep going. Sort the triage queue at the next phase boundary: promote to phase (move to `Todo`), defer (move to `Backlog`), or close.
 
-**When to use Backlog**: at `/plan` time, only the first phase starts in `In Progress` and immediately-actionable phases start in `Todo`; phases that depend on a prior phase finishing, or that are post-MVP stretch goals, can start in `Backlog` instead. Promote to `Todo` when prerequisites are met. This keeps `list_issues({ state: Todo })` honest as "ready to work."
+**When to use Backlog**: at `/plan` time, only the first phase starts in `In Progress` and immediately-actionable phases start in `Todo`; phases that depend on a prior phase finishing, or that are post-MVP stretch goals, can start in `Backlog` instead. Promote to `Todo` when its `blockedBy` issues are all `Done` (see Issue Relations below). This keeps `list_issues({ state: Todo })` honest as "ready to work."
 
 Triage and Backlog issues are **not** counted against phase completion — `/sync` and the Stop hook only count `phase`-labeled issues that have ever been active (Todo / In Progress / Done).
+
+## Issue Relations (phase dependencies)
+
+Linear has first-class issue relations. Use them so dependencies between phases are queryable, not buried in prose. `mcp__linear__save_issue` accepts `blocks`, `blockedBy`, `relatedTo`, `duplicateOf` (each append-only; pair with `removeBlocks` / `removeBlockedBy` / `removeRelatedTo` to remove). `mcp__linear__get_issue({ includeRelations: true })` returns them.
+
+| Relation | When to set | Effect on planning |
+|---|---|---|
+| `blockedBy` | Phase B cannot start until Phase A is `Done` | Phase B stays in `Backlog` until every blocker is `Done`, then promotes to `Todo` |
+| `blocks` | Inverse of `blockedBy` (Linear records both sides automatically; setting either is fine) | Surfaces downstream impact when a phase slips |
+| `relatedTo` | Soft cross-link with no ordering implication (e.g., Triage idea touching the same module as a phase) | No state effect; helps reconstruct context |
+| `duplicateOf` | Triage sorting reveals an item is already covered by an existing issue | Set on the triage issue, then close it as `Cancelled`. Don't delete — the link is the audit trail |
+
+**At `/plan` time**: after creating phase issues, wire the linear chain — Phase 2 `blockedBy` Phase 1, Phase 3 `blockedBy` Phase 2, etc. Branching plans can have multiple blockers per phase. Don't list "Depends on: ENG-101" in the issue body and call it a day; the structured relation is the source of truth.
+
+**Backlog promotion check**: before flipping a `Backlog` phase to `Todo`, call `mcp__linear__get_issue({ id, includeRelations: true })` and confirm every `blockedBy` issue is `Done`. If any blocker is still active, leave the phase in `Backlog`.
+
+**Triage sorting**: when promoting a triage item to a phase, also wire its `blockedBy` relations at promotion time, not later. When dropping a triage item as a duplicate, set `duplicateOf` and close — never just delete.
 
 ## Critical Rules
 
@@ -259,3 +276,5 @@ There is no SHA-256 attestation in this skill. The original (`planning-with-file
 | Use Linear Cycles, Initiatives, Customers | Out of scope for this skill — see reference.md |
 | Widen the active phase to absorb ad-hoc ideas | Drop them into Triage and sort at the next phase boundary |
 | Mass-create every future phase as `Todo` | Only mark prerequisite-clear phases `Todo`; the rest start in `Backlog` |
+| Encode phase order only by listing IDs in the description | Set `blockedBy` on `save_issue` so dependencies are queryable |
+| Delete a triage idea that turns out to be redundant | Mark it `duplicateOf` the existing issue and close — keeps the audit trail |
