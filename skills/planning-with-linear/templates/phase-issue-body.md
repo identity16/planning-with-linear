@@ -18,8 +18,9 @@
 
 - Project: {{PROJECT_URL}}
 - Findings document: {{FINDINGS_DOCUMENT_URL}}
-- Depends on: {{PREV_PHASE_ISSUE_ID_OR_NONE}}
+
+Dependencies on other phases live as Linear issue relations (`blockedBy` / `blocks`), not in this body. Fetch them with `get_issue({ id, includeRelations: true })`. Use the `blocker` label only for *external* blockers (vendor, missing access, unanswered question) that aren't another issue in this plan.
 
 ## Notes
 
-Mid-phase work logs (test results, decisions, errors) belong as comments on this issue, not in the project description. When the phase finishes, transition state to `Done` and let the next phase issue pick up.
+Mid-phase work logs (test results, decisions, errors) belong as comments on this issue, not in the project description. When the phase finishes, transition state to `Done` and let any phase that was `blockedBy` this one move from `Backlog` to `Todo`.

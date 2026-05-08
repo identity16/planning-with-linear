@@ -25,7 +25,10 @@ Manus's principles still hold; only the writes target a different surface.
 | Session log (high-level) | Project Status Update | `mcp__linear__save_status_update` | `mcp__linear__get_status_updates` |
 | Test results, mid-phase notes | Comment on the phase issue | `mcp__linear__save_comment` | `mcp__linear__list_comments` |
 | Errors with the 3-strike protocol | Comment on the phase issue + `error` label on issue | `mcp__linear__save_comment`, `mcp__linear__save_issue` | `mcp__linear__list_comments`, `mcp__linear__list_issues` |
-| Blocked phase | `blocker` label on issue | `mcp__linear__save_issue` | `mcp__linear__list_issues` |
+| Blocked phase (external dependency) | `blocker` label on issue | `mcp__linear__save_issue` | `mcp__linear__list_issues` |
+| Phase-to-phase dependency (internal) | `blockedBy` / `blocks` issue relation | `mcp__linear__save_issue` (`blockedBy`, `blocks`, `removeBlockedBy`, `removeBlocks`) | `mcp__linear__get_issue({ includeRelations: true })` |
+| Cross-link without ordering | `relatedTo` issue relation | `mcp__linear__save_issue` (`relatedTo`, `removeRelatedTo`) | `mcp__linear__get_issue({ includeRelations: true })` |
+| Triage idea already covered | `duplicateOf` issue relation + close | `mcp__linear__save_issue` (`duplicateOf`, `state`) | `mcp__linear__get_issue({ includeRelations: true })` |
 | Active project pointer | `.planning/.active_linear` JSON | `set-active-linear.sh` | `resolve-active-linear.sh` |
 
 ## Why Phase = Issue (not Milestone)
@@ -41,14 +44,80 @@ If a phase grows beyond ~5 sub-tasks, the escape hatch is to keep the phase issu
 Linear teams can rename their states ("Doing" instead of "In Progress", "Shipped" instead of "Done"). At init, call `mcp__linear__list_issue_statuses` for the chosen team and cache the actual names by their **type**:
 
 ```
-type=backlog  → cached as states.backlog
+type=triage    → cached as states.triage     (may be absent on some teams)
+type=backlog   → cached as states.backlog
 type=unstarted → cached as states.todo
-type=started  → cached as states.in_progress
+type=started   → cached as states.in_progress
 type=completed → cached as states.done
-type=canceled → cached as states.canceled
+type=canceled  → cached as states.canceled
 ```
 
-Always read from the cache (or re-fetch if missing) — never hardcode "In Progress".
+Always read from the cache (or re-fetch if missing) — never hardcode "In Progress". `triage` is optional: not every team enables it. If absent, fall back to `backlog` for the inbox role and add an explanatory note in the Findings Document.
+
+## Triage and Backlog Surfaces
+
+Active phases live in `Todo → In Progress → Done`. The two upstream states play distinct roles:
+
+| State | Role | Lifetime | Carries `phase` label? |
+|---|---|---|---|
+| `Triage` | Capture-first inbox for ad-hoc ideas, mid-execution discoveries, drift requests | Hours-to-days; sorted at phase boundaries | No (use `triage` body or no label) |
+| `Backlog` | Phase planned but not yet ready (prerequisites pending / stretch goal / deferred follow-up) | Days-to-weeks; promoted to `Todo` when ready | Yes — it is still a phase, just not active |
+
+### Triage queue lifecycle
+
+1. **Capture** — during work, when something outside the current phase's scope comes up, call `mcp__linear__save_issue({ projectId, state: states.triage, title: "<one-liner>" })`. Don't write a long body; capture is supposed to be cheap.
+2. **Review** — at every phase boundary (and at session start when resuming), list triage items: `mcp__linear__list_issues({ projectId, state: states.triage })`.
+3. **Sort** — for each item:
+   - **Promote to phase**: add the `phase` label, fill in a phase issue body, set state to `Todo` (or `Backlog` if dependent on another phase).
+   - **Defer**: move to `Backlog` without the `phase` label if it's a future improvement, not a phase.
+   - **Drop**: set state to `Cancelled` with a one-line reason in a comment.
+4. **Don't let it grow unbounded** — if the triage queue exceeds ~10 items, stop work and sort. A bloated triage queue means the plan no longer matches reality; revisit the project description.
+
+### Backlog promotion
+
+A `Backlog` phase issue moves to `Todo` only when:
+- The phase it depends on is `Done`, **and**
+- Its Definition of Done is still accurate (re-read; edit if stale).
+
+If neither holds, leave it in `Backlog`. The Stop hook and `/status` count only phase issues that are or have been active (Todo / In Progress / Done) — `Backlog` phases are not counted as "remaining work" because they may never become active.
+
+### What about the `triage` label?
+
+Linear comments and bodies cannot carry workflow state, so the **state** field (`Triage`) is the source of truth for inbox membership. Don't introduce a `triage` label — it would duplicate state and make filtering ambiguous. The four canonical labels (`phase`, `error`, `decision`, `blocker`) are unchanged.
+
+## Issue Relations
+
+Linear's native issue relations replace the "Depends on: ENG-101" prose that originally lived in markdown. They are queryable, bidirectional, and survive issue moves.
+
+| Relation | Direction | Used for | Source-of-truth check |
+|---|---|---|---|
+| `blockedBy` / `blocks` | Asymmetric (A blocks B = B blockedBy A; Linear records both sides automatically) | Phase ordering inside a project | Before promoting `Backlog → Todo`, every `blockedBy` issue must be `Done` |
+| `relatedTo` | Symmetric | Soft cross-link: a triage idea touching a phase's code, two phases that share a constraint, etc. | None — informational only |
+| `duplicateOf` | Asymmetric (one-way) | A triage idea that's already covered by an existing issue, or a phase that subsumes another | After setting, close the duplicate as `Cancelled` |
+
+### When to set what
+
+- **Phase chain at `/plan` time** — after creating phase issues, set `blockedBy` so each phase points to the one before it. Branching plans can have multiple `blockedBy` per phase.
+- **Triage promotion** — when a triage item becomes a phase, set `blockedBy` to whatever active phase must finish first. If nothing blocks it, set state to `Todo` directly.
+- **Triage dedup** — when a triage item is already covered, set `duplicateOf` to the covering issue and `state=Cancelled`. The link survives in `get_issue({ includeRelations: true })`, so the audit trail is intact.
+- **Cross-project hints** — `relatedTo` accepts cross-project IDs. Useful for linking a phase here to an earlier project's discovery, but don't overuse — every link is a thing the model has to explain on resume.
+
+### Reading relations
+
+Relations are not on the default `get_issue` payload. Pass `includeRelations: true`. The `list_issues` payload does **not** include relations, so the pattern is:
+
+```
+list_issues({ projectId, state: states.backlog })   → candidates to promote
+get_issue({ id, includeRelations: true })           → check blockedBy is empty or all-Done
+```
+
+`.planning/.active_linear` does **not** cache relations — they're cheap to fetch and would drift fast. Re-fetch each time.
+
+### Don't fight Linear's edges
+
+- Don't simulate `blockedBy` with sub-issues (`parentId`). Sub-issues are for *decomposition* (a phase that grew too big); blockedBy is for *ordering*.
+- Don't use the `blocker` label as a substitute for `blockedBy`. The `blocker` label means "stuck on something external (not another phase issue)" — a vendor outage, an unanswered question, a missing access. The `blockedBy` relation means "stuck on another issue in this plan."
+- Don't set `blockedBy` to issues outside the project unless you really mean it. Cross-project blocks are valid but they leak the plan boundary; prefer `relatedTo` for soft cross-project hints.
 
 ## Label Conventions
 
@@ -100,6 +169,7 @@ Document is searchable across the project's lifetime. Issue comments are anchore
   "team_key": "ENG",
   "document_id": "01H...",
   "states": {
+    "triage": "Triage",
     "backlog": "Backlog",
     "todo": "Todo",
     "in_progress": "In Progress",
